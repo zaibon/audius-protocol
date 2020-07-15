@@ -114,7 +114,7 @@ const startApp = async () => {
   // fail if delegateOwnerWallet & delegatePrivateKey not present
   const delegateOwnerWallet = config.get('delegateOwnerWallet')
   const delegatePrivateKey = config.get('delegatePrivateKey')
-  const spID = config.get('spID')
+  let spID = config.get('spID')
   console.log(`spID: ${spID} // typeof ${typeof (spID)}`)
   if (!delegateOwnerWallet || !delegatePrivateKey) {
     exitWithError('Cannot startup without delegateOwnerWallet and delegatePrivateKey')
@@ -143,10 +143,26 @@ const startApp = async () => {
 
     /** if spID is 0, check if registered on chain and store locally */
     if (spID === 0 && audiusLibs) {
+      console.log(config.get('creatorNodeEndpoint'))
       const recoveredSpID = await audiusLibs.ethContracts.ServiceProviderFactoryClient.getServiceProviderIdFromEndpoint(
         config.get('creatorNodeEndpoint')
       )
       config.set('spID', recoveredSpID)
+      console.log(`Updated spID: ${recoveredSpID} // typeof ${typeof (recoveredSpID)}`)
+    }
+
+    spID = config.get('spID')
+    try {
+      // console.log(audiusLibs)
+      console.log('--')
+      let wallet = await audiusLibs.contracts.UserReplicaSetManagerClient.getCreatorNodeWallet(spID) 
+      console.log(`UserReplicaSetManager - CnodeWallet for ${spID} - ${wallet}`)
+      // This wallet should be equal to the delegate owner wallet config
+      let delegateWallet = config.get('delegateOwnerWallet')
+      let delegatePrivateKey = config.get('delegatePrivateKey')
+      console.log(`From config: delegateWallet=${delegateWallet}, delegatePrivateKey=${delegatePrivateKey}`)
+    } catch (e) {
+      console.log(`Transient error ${e}`)
     }
 
     appInfo = initializeApp(config.get('port'), storagePath, ipfs, audiusLibs, BlacklistManager, ipfsLatest)
