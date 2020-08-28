@@ -197,7 +197,7 @@ class ServiceProviderFactoryClient extends GovernedContractClient {
       endpoint: info.endpoint,
       spID: parseInt(serviceId),
       type: serviceType,
-      blocknumber: info.blocknumber,
+      blockNumber: parseInt(info.blockNumber),
       delegateOwnerWallet: info.delegateOwnerWallet
     }
   }
@@ -266,6 +266,86 @@ class ServiceProviderFactoryClient extends GovernedContractClient {
       DEFAULT_GAS_AMOUNT
     )
   }
+
+  async getServiceProviderDetails (serviceProviderAddress) {
+    const method = await this.getMethod(
+      'getServiceProviderDetails',
+      serviceProviderAddress
+    )
+    let info = await method.call()
+    return {
+      deployerCut: parseInt(info.deployerCut), 
+      deployerStake: Utils.toBN(info.deployerStake),
+      maxAccountStake: Utils.toBN(info.maxAccountStake), 
+      minAccountStake: Utils.toBN(info.minAccountStake), 
+      numberOfEndpoints: parseInt(info.numberOfEndpoints), 
+      validBounds: info.validBounds
+    }
+  }
+
+
+  // Test Here down 
+  async updateDelegateOwnerWallet (serviceType, endpoint, updatedDelegateOwnerWallet) {
+    const method = await this.getMethod(
+      'updateDelegateOwnerWallet',
+      Utils.utf8ToHex(serviceType),
+      endpoint,
+      updatedDelegateOwnerWallet
+    )
+
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
+  async updateEndpoint (serviceType, oldEndpoint, newEndpoint) {
+    const method = await this.getMethod(
+      'updateEndpoint',
+      Utils.utf8ToHex(serviceType),
+      oldEndpoint,
+      newEndpoint
+    )
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
+  async requestUpdateDeployerCut (ownerAddress, deployerCut) {
+    const method = await this.getMethod(
+      'requestUpdateDeployerCut',
+      ownerAddress,
+      deployerCut
+    )
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
+  async cancelUpdateDeployerCut (ownerAddress) {
+    const method = await this.getMethod(
+      'cancelUpdateDeployerCut',
+      ownerAddress
+    )
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
+  async updateDeployerCut (ownerAddress) {
+    const method = await this.getMethod(
+      'updateDeployerCut',
+      ownerAddress
+    )
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
+  async updateServiceProviderStake (ownerAddress, newAmount) {
+    const method = await this.getMethod(
+      'updateServiceProviderStake',
+      ownerAddress,
+      newAmount
+    )
+    let tx = await this.web3Manager.sendTransaction(method, DEFAULT_GAS_AMOUNT)
+    return tx
+  }
+
 }
 
 module.exports = ServiceProviderFactoryClient

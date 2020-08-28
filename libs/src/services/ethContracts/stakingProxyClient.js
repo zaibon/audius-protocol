@@ -76,15 +76,16 @@ class StakingProxyClient extends ContractClient {
     return tx
   }
 
-  async getClaimInfo () {
-    const method = await this.getMethod('getClaimInfo')
-    let tx = await method.call()
-    return {
-      txReceipt: tx,
-      claimableAmount: tx[0] / Math.pow(10, 18),
-      currentClaimBlock: parseInt(tx[1], 10)
-    }
-  }
+  // Does not exist anymore
+  // async getClaimInfo () {
+  //   const method = await this.getMethod('getClaimInfo')
+  //   let tx = await method.call()
+  //   return {
+  //     txReceipt: tx,
+  //     claimableAmount: tx[0] / Math.pow(10, 18),
+  //     currentClaimBlock: parseInt(tx[1], 10)
+  //   }
+  // }
 
   async makeClaim () {
     const method = await this.getMethod('makeClaim')
