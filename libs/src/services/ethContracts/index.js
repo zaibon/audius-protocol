@@ -225,6 +225,10 @@ class EthContracts {
     return this.ServiceTypeManagerClient.getVersion(spType, queryIndex)
   }
 
+  async getServiceTypeInfo (spType) {
+    return this.ServiceTypeManagerClient.getServiceTypeInfo(spType)
+  }
+
   /**
    * Returns a valid service provider url with the fastest response
    * @param {string} spType service provider type: 'discovery-provider' | 'content-service' | 'creator-node'

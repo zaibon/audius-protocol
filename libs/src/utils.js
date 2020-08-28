@@ -39,6 +39,10 @@ class Utils {
     return Web3.utils.isBN(number)
   }
 
+  static toBN (number) {
+    return new Web3.utils.BN(number)
+  }
+
   static checkStrLen (str, maxLen, minLen = 1) {
     if (str === undefined || str === null || str.length > maxLen || str.length < minLen) {
       throw new Error(`String must be between ${minLen}-${maxLen} characters`)
@@ -99,10 +103,10 @@ class Utils {
     const web3Instance = new Web3(web3Provider)
 
     try {
-      const networkId = await web3Instance.eth.net.getId()
-      if (chainNetworkId && networkId.toString() !== chainNetworkId) {
-        return false
-      }
+      // const networkId = await web3Instance.eth.net.getId()
+      // if (chainNetworkId && networkId.toString() !== chainNetworkId) {
+      //   return false
+      // }
       if (requiresAccount) {
         const accounts = await web3Instance.eth.getAccounts()
         if (!accounts || accounts.length < 1) {
