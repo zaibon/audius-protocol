@@ -33,11 +33,11 @@ const dpTypeMin = _lib.audToWei(200000)
 const dpTypeMax = _lib.audToWei(2000000)
 // stake lockup duration = 1 wk in blocks
 // - 1/13 block/s * 604800 s/wk ~= 46523 block/wk
-const decreaseStakeLockupDuration = 46523
+const decreaseStakeLockupDuration = 21
 
 // modifying deployer cut = 8 days in blocks
 // - 1/13 block/s * 691200 s/8 days ~= 53169 block/wk
-const deployerCutLockupDuration = 53169
+const deployerCutLockupDuration = 11
 
 module.exports = (deployer, network, accounts) => {
   deployer.then(async () => {
@@ -53,6 +53,18 @@ module.exports = (deployer, network, accounts) => {
     const claimsManager = await ClaimsManager.at(process.env.claimsManagerAddress)
     const registry = await Registry.at(registryAddress)
     const governance = await Governance.at(governanceAddress)
+
+    const proposedBlockDiff = _lib.toBN(2)
+
+    claimsManager.updateFundingRoundBlockDiff(proposedBlockDiff, { from: accounts[7] })
+
+    let govTx = await governance.guardianExecuteTransaction(
+      claimsManagerProxyKey,
+      _lib.toBN(0),
+      'updateFundingRoundBlockDiff(uint256)',
+      _lib.abiEncode(['uint256'], [_lib.fromBN(proposedBlockDiff)]),
+      { from: guardianAddress }
+    )
 
     // Deploy ServiceTypeManager logic and proxy contracts + register proxy
     const serviceTypeManager0 = await deployer.deploy(ServiceTypeManager, { from: proxyDeployerAddress })
