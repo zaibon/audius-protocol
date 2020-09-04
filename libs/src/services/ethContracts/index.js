@@ -110,6 +110,8 @@ class EthContracts {
       DelegateManagerABI,
       DelegateManagerRegistryKey,
       this.getRegistryAddressForContract,
+      this.AudiusTokenClient,
+      this.StakingProxyClient,
       this.GovernanceClient
     )
 
@@ -167,6 +169,7 @@ class EthContracts {
       return version
     } catch (e) {
       console.log(`Error retrieving version for ${serviceType}`)
+      console.log(e)
       return null
     }
   }

@@ -10,18 +10,18 @@ const AudiusAdminUpgradeabilityProxy = artifacts.require('AudiusAdminUpgradeabil
 const governanceRegKey = web3.utils.utf8ToHex('Governance')
 
 // 48hr * 60 min/hr * 60 sec/min / ~13 sec/block = 13292 blocks
-const VotingPeriod = 13292
+const VotingPeriod = 10
 // Required percent of total stake to have been voted with on proposal
 const VotingQuorumPercent = 10
 
 // Max number of concurrent InProgress proposals
 // - Setting to 100 by default as that is a sufficiently large value that is not at gas limit risk
-const MaxInProgressProposals = 100
+const MaxInProgressProposals = 20
 
 const MaxDescriptionLengthBytes = 250
 
 // 24hr * 60min/hr * 60sec/min / ~13 sec/block = 6646 blocks
-const ExecutionDelayBlocks = 6646
+const ExecutionDelayBlocks = 10
 
 module.exports = (deployer, network, accounts) => {
   deployer.then(async () => {

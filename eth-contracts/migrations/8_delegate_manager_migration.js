@@ -18,7 +18,7 @@ const delegateManagerKey = web3.utils.utf8ToHex('DelegateManager')
 
 // undelegate lockup duration = 1 wk in blocks
 // - 1/13 block/s * 604800 s/wk ~= 46523 block/wk
-const undelegateLockupDuration = 46523
+const undelegateLockupDuration = 21
 
 module.exports = (deployer, network, accounts) => {
   deployer.then(async () => {
