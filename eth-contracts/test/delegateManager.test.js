@@ -623,12 +623,18 @@ contract('DelegateManager', async (accounts) => {
         delegateAmount,
         { from: stakerAccount6 })
 
+      let deployerCut2 = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerCut
+      console.log(`deployerCut for staker2= ${deployerCut2}`)
       console.log(`delegated ${delegateAmount}`)
       console.log(`total stake=${(await staking.totalStaked()).toString()}`)
       totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
       console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
       let totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
       console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()}`)
+      let sp2Stake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerStake
+      let sp2DelegatedStake = await delegateManager.getTotalDelegatedToServiceProvider(stakerAccount2)
+      console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()} - deployerStake=${sp2Stake.toString()} - delegation=${sp2DelegatedStake.toString()}`)
+
       let totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
       console.log(`acct 3=${stakerAccount3} - ${totalStakedForStaker3.toString()}`)
       let totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
@@ -653,6 +659,24 @@ contract('DelegateManager', async (accounts) => {
 
       console.log('Moving to next round...')
 
+      // Log all balances here
+      console.log('------------------')
+      console.log(`total stake=${(await staking.totalStaked()).toString()}`)
+      totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
+      console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
+
+      totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
+      sp2Stake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerStake
+      sp2DelegatedStake = await delegateManager.getTotalDelegatedToServiceProvider(stakerAccount2)
+      console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()} - deployerStake=${sp2Stake.toString()} - delegation=${sp2DelegatedStake.toString()}`)
+
+      totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
+      console.log(`acct 3=${stakerAccount3} - ${totalStakedForStaker3.toString()}`)
+      totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
+      console.log(`acct 4=${stakerAccount4} - ${totalStakedForStaker4.toString()}`)
+      totalStakedForStaker5 = await staking.totalStakedFor(stakerAccount5) 
+      console.log(`acct 5=${stakerAccount5} - ${totalStakedForStaker5.toString()}`)
+
       let fundBlock = await claimsManager.getLastFundedBlock()
       let blockDiff = await claimsManager.getFundingRoundBlockDiff()
       let roundEndBlock = fundBlock.add(blockDiff.add(_lib.toBN(10)))
@@ -676,21 +700,25 @@ contract('DelegateManager', async (accounts) => {
       totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
       console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
 
-      let totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
-      let sp2Stake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerStake
-      let sp2DelegatedStake = await delegateManager.getTotalDelegatedToServiceProvider(stakerAccount2)
+      totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
+      sp2Stake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerStake
+      sp2DelegatedStake = await delegateManager.getTotalDelegatedToServiceProvider(stakerAccount2)
       console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()} - deployerStake=${sp2Stake.toString()} - delegation=${sp2DelegatedStake.toString()}`)
 
-      let totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
+      totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
       console.log(`acct 3=${stakerAccount3} - ${totalStakedForStaker3.toString()}`)
-      let totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
+      totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
       console.log(`acct 4=${stakerAccount4} - ${totalStakedForStaker4.toString()}`)
-      let totalStakedForStaker5 = await staking.totalStakedFor(stakerAccount5) 
+      totalStakedForStaker5 = await staking.totalStakedFor(stakerAccount5) 
       console.log(`acct 5=${stakerAccount5} - ${totalStakedForStaker5.toString()}`)
-
+      // acct 2=0xAec52Ee20ac92FF9C2cb63AAEd8cf53F2B71cC72
+      //               = 1225858617583293134065691 - 
+      // deployerStake=1224957199510101047353201 - delegation=901418073192086712488
+      // 1224957199510101047353201 + 901418073192086712488 = 1225858617583293134065689 
+      //                                                     1225858617583293134065691
+      // Discrepancy of 2 wei
 
       return
-
     })
 
     it('Sandbox', async () => {
