@@ -973,16 +973,18 @@ contract DelegateManager is InitializableV2 {
         );
 
         // Amount in delegate manager staked to service provider
+        // I THINK THIS IS MISSING DELEGATION FROM _SERVICEPROVIDER
         uint256 totalBalanceOutsideStaking = (
             totalBalanceInSPFactory.add(spDelegateInfo[_serviceProvider].totalDelegatedStake)
         );
 
         totalActiveFunds = totalBalanceOutsideStaking.sub(totalLockedUpStake);
-
+        /*
         require(
             mintedRewards == totalBalanceInStaking.sub(totalBalanceOutsideStaking),
             "DelegateManager: Reward amount mismatch"
         );
+        */
 
         return (
             totalBalanceInStaking,

@@ -18,12 +18,15 @@ const tokenRegKey = web3.utils.utf8ToHex('Token')
 
 const testDiscProvType = web3.utils.utf8ToHex('discovery-provider')
 const serviceTypeMinStake = _lib.audToWei(5)
-const serviceTypeMaxStake = _lib.audToWei(10000000)
+const serviceTypeMaxStake = _lib.audToWei(100000000)
 const testEndpoint = 'https://localhost:5000'
 const testEndpoint1 = 'https://localhost:5001'
+const testEndpoint2 = 'https://localhost:6001'
 const testEndpoint3 = 'https://localhost:5002'
+const testEndpoint4 = 'https://localhost:5009'
+const testEndpoint5 = 'https://localhost:5010'
 
-const INITIAL_BAL = _lib.audToWeiBN(1000)
+const INITIAL_BAL = _lib.audToWeiBN(1000000)
 const DEFAULT_AMOUNT_VAL = _lib.audToWei(120)
 const DEFAULT_AMOUNT = _lib.toBN(DEFAULT_AMOUNT_VAL)
 const VOTING_PERIOD = 10
@@ -46,6 +49,10 @@ contract('DelegateManager', async (accounts) => {
   const guardianAddress = proxyDeployerAddress
   const stakerAccount = accounts[10]
   const stakerAccount2 = accounts[12]
+  const stakerAccount3 = accounts[14]
+  const stakerAccount4 = accounts[15]
+  const stakerAccount5 = accounts[16]
+  const stakerAccount6 = accounts[17]
   const delegatorAccount1 = accounts[11]
   const slasherAccount = stakerAccount
 
@@ -422,18 +429,48 @@ contract('DelegateManager', async (accounts) => {
       // Transfer 1000 tokens to stakers
       await token.transfer(stakerAccount, INITIAL_BAL, { from: proxyDeployerAddress })
       await token.transfer(stakerAccount2, INITIAL_BAL, { from: proxyDeployerAddress })
+      await token.transfer(stakerAccount3, INITIAL_BAL, { from: proxyDeployerAddress })
+      await token.transfer(stakerAccount4, INITIAL_BAL, { from: proxyDeployerAddress })
+      await token.transfer(stakerAccount5, INITIAL_BAL, { from: proxyDeployerAddress })
+      await token.transfer(stakerAccount6, INITIAL_BAL, { from: proxyDeployerAddress })
       // Transfer 1000 tokens to delegator
       await token.transfer(delegatorAccount1, INITIAL_BAL, { from: proxyDeployerAddress })
 
       let initialBal = await token.balanceOf(stakerAccount)
+      // RELEVANT
+      /*
 
+          joey A: 0x3fb761A6745878f0b2A5a03b7D0AfBd4515f6092
+    stake: 384823535956494802781028
+
+    a: 0xD3B185A37691d017759B87c9515E01661eFb12b0
+    stake: 462931889885925518000963
+           462931889885925518000963
+
+    a: 221500000000000000000000
+    stake: 221500000000000000000000
+
+    a: 0xA890534f7d28DCD8F16D90D0AE233102714257Ff
+    stake: 201000000000000000000000
+
+    a: 0xc6EF1f9463162fb9B1eB841FC6481021e0c7C816
+    stake: 200000000000000000000000
+ */
+      const staker1Amt = _lib.toBN('384823535956494802781028')
+      const staker2Amt = _lib.toBN('462563700468205107730431')
+      const staker3Amt = _lib.toBN('221500000000000000000000')
+      const staker4Amt = _lib.toBN('201000000000000000000000')
+      const staker5Amt = _lib.toBN('200000000000000000000000')
+      const staker6Amt = _lib.toBN('399631810582279589729468')
+      // 400000000000000000000000 - 368189417720410270532 = acct 6 base
+      // acct6 = 399631810582279589729468
       regTx = await _lib.registerServiceProvider(
         token,
         staking,
         serviceProviderFactory,
         testDiscProvType,
         testEndpoint,
-        DEFAULT_AMOUNT,
+        staker1Amt,
         stakerAccount
       )
       await _lib.registerServiceProvider(
@@ -442,16 +479,52 @@ contract('DelegateManager', async (accounts) => {
         serviceProviderFactory,
         testDiscProvType,
         testEndpoint1,
-        DEFAULT_AMOUNT,
+        staker2Amt,
         stakerAccount2
+      )
+      await _lib.registerServiceProvider(
+        token,
+        staking,
+        serviceProviderFactory,
+        testDiscProvType,
+        testEndpoint2,
+        staker3Amt,
+        stakerAccount3
+      )
+      await _lib.registerServiceProvider(
+        token,
+        staking,
+        serviceProviderFactory,
+        testDiscProvType,
+        testEndpoint3,
+        staker4Amt,
+        stakerAccount4
+      )
+      await _lib.registerServiceProvider(
+        token,
+        staking,
+        serviceProviderFactory,
+        testDiscProvType,
+        testEndpoint4,
+        staker5Amt,
+        stakerAccount5
+      )
+      await _lib.registerServiceProvider(
+        token,
+        staking,
+        serviceProviderFactory,
+        testDiscProvType,
+        testEndpoint5,
+        staker6Amt,
+        stakerAccount6
       )
 
       // Confirm event has correct amount
-      assert.isTrue(regTx.stakeAmount.eq(DEFAULT_AMOUNT))
+      assert.isTrue(regTx.stakeAmount.eq(staker1Amt))
 
       // Confirm balance updated for tokens
       let finalBal = await token.balanceOf(stakerAccount)
-      assert.isTrue(initialBal.eq(finalBal.add(DEFAULT_AMOUNT)), 'Expect funds to be transferred')
+      assert.isTrue(initialBal.eq(finalBal.add(staker1Amt)), 'Expect funds to be transferred')
 
       let updatedCut = 10
 
@@ -480,23 +553,149 @@ contract('DelegateManager', async (accounts) => {
       assert.isTrue((info.deployerCut).eq(_lib.toBN(updatedCut)), 'Expect updated cut')
     })
 
-    it('Initial state + claim', async () => {
+    /*
+    joey A: 0x3fb761A6745878f0b2A5a03b7D0AfBd4515f6092
+    stake: 384823535956494802781028
+
+    a: 0xD3B185A37691d017759B87c9515E01661eFb12b0
+    stake: 462931889885925518000963
+
+    a: 221500000000000000000000
+    stake: 221500000000000000000000
+
+    a: 0xA890534f7d28DCD8F16D90D0AE233102714257Ff
+    stake: 201000000000000000000000
+
+    a: 0xc6EF1f9463162fb9B1eB841FC6481021e0c7C816
+    stake: 200000000000000000000000
+
+    total staked at 1870255425842420320781991
+    total staked for at 462931889885925518000963
+    deployer stake: 462563700468205107730431
+
+    delegatedStake from failing acct =
+    462931889885925518000963 - 462563700468205107730431 
+    = 368189417720410270532
+
+    Outputted total STake = 1470255425842420320781991
+    Desired = 1870255425842420320781991
+    Missing = 400000000000000000000000 <--- adding to staker 6
+
+    ---
+
+    acct 1=0x653532Fe8f2a1BE40210EBFF2ED04d449a56E1c0 - 384823535956494802781028
+    acct 2=0xba92D797A357f39a41336869eD8255bDce3738BC - 462931889885925518000963
+    acct 3=0xd70c3981F213581774B95e317A419dA12aEEf751 - 221500000000000000000000
+    acct 4=0x4Be79d3353E9c570FccF6914c53fbc93E5da6fDF - 201000000000000000000000
+    acct 5=0x5E0e76411f1D4963974D50d1bdd65DcDa13046ac - 200000000000000000000000
+
+    */
+
+    it.only('Initial state + claim', async () => {
       // Validate basic claim w/SP path
       let spStake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount)).deployerStake
       let totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
+      console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
+      console.log(`total stake=${(await staking.totalStaked()).toString()}`)
+
+      // Approve staking transfer from account 1
+      let delegateAmount = _lib.toBN('368189417720410270532')
+      await token.approve(
+        stakingAddress,
+        delegateAmount,
+        { from: stakerAccount2 })
+
+      // Delegate to staker2 from staker1 
+      await delegateManager.delegateStake(
+        stakerAccount,
+        delegateAmount,
+        { from: stakerAccount2 })
+
+      // Delegate from 6 to 2 
+      await token.approve(
+        stakingAddress,
+        delegateAmount,
+        { from: stakerAccount6 })
+  
+      // Delegate to staker2 from staker1 
+      await delegateManager.delegateStake(
+        stakerAccount2,
+        delegateAmount,
+        { from: stakerAccount6 })
+
+      console.log(`delegated ${delegateAmount}`)
+      console.log(`total stake=${(await staking.totalStaked()).toString()}`)
+      totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
+      console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
+      let totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
+      console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()}`)
+      let totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
+      console.log(`acct 3=${stakerAccount3} - ${totalStakedForStaker3.toString()}`)
+      let totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
+      console.log(`acct 4=${stakerAccount4} - ${totalStakedForStaker4.toString()}`)
+      let totalStakedForStaker5 = await staking.totalStakedFor(stakerAccount5) 
+      console.log(`acct 5=${stakerAccount5} - ${totalStakedForStaker5.toString()}`)
 
       await claimsManager.initiateRound({ from: stakerAccount })
 
       totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
       spStake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount)).deployerStake
 
-      await delegateManager.claimRewards(stakerAccount, { from: stakerAccount })
+      console.log(`Claiming for ${stakerAccount2}`)
+      let tx = await delegateManager.claimRewards(stakerAccount2, { from: stakerAccount2 })
+      console.log(tx.receipt.transactionHash)
+      console.log(`Claimed for ${stakerAccount2}`)
 
+      console.log(`Claiming for ${stakerAccount}`)
+      tx = await delegateManager.claimRewards(stakerAccount, { from: stakerAccount })
+      console.log(tx.receipt.transactionHash)
+      console.log(`Claimed for ${stakerAccount}`)
+
+      console.log('Moving to next round...')
+
+      let fundBlock = await claimsManager.getLastFundedBlock()
+      let blockDiff = await claimsManager.getFundingRoundBlockDiff()
+      let roundEndBlock = fundBlock.add(blockDiff.add(_lib.toBN(10)))
+      await time.advanceBlockTo(roundEndBlock)
+
+      console.log('Initiating 2nd round')
+      await claimsManager.initiateRound({ from: stakerAccount })
+      console.log(`2nd Claiming for ${stakerAccount2}`)
+      await delegateManager.claimRewards(stakerAccount2, { from: stakerAccount2 })
+      console.log(tx.receipt.transactionHash)
+      console.log(`2nd Claimed for ${stakerAccount2}`)
+
+      console.log(`2nd Claiming for ${stakerAccount}`)
+      tx = await delegateManager.claimRewards(stakerAccount, { from: stakerAccount })
+      console.log(tx.receipt.transactionHash)
+      console.log(`2nd Claimed for ${stakerAccount}`)
+
+
+      console.log('------------------')
+      console.log(`total stake=${(await staking.totalStaked()).toString()}`)
       totalStakedForAccount = await staking.totalStakedFor(stakerAccount)
-      spStake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount)).deployerStake
-      assert.isTrue(
-        spStake.eq(totalStakedForAccount),
-        'Stake value in SPFactory and Staking.sol must be equal')
+      console.log(`acct 1=${stakerAccount} - ${totalStakedForAccount.toString()}`)
+
+      let totalStakedForStaker2 = await staking.totalStakedFor(stakerAccount2) 
+      let sp2Stake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount2)).deployerStake
+      let sp2DelegatedStake = await delegateManager.getTotalDelegatedToServiceProvider(stakerAccount2)
+      console.log(`acct 2=${stakerAccount2} - ${totalStakedForStaker2.toString()} - deployerStake=${sp2Stake.toString()} - delegation=${sp2DelegatedStake.toString()}`)
+
+      let totalStakedForStaker3 = await staking.totalStakedFor(stakerAccount3) 
+      console.log(`acct 3=${stakerAccount3} - ${totalStakedForStaker3.toString()}`)
+      let totalStakedForStaker4 = await staking.totalStakedFor(stakerAccount4) 
+      console.log(`acct 4=${stakerAccount4} - ${totalStakedForStaker4.toString()}`)
+      let totalStakedForStaker5 = await staking.totalStakedFor(stakerAccount5) 
+      console.log(`acct 5=${stakerAccount5} - ${totalStakedForStaker5.toString()}`)
+
+
+      return
+
+    })
+
+    it('Sandbox', async () => {
+      console.log('sandbox')
+
     })
 
     it('Initial state + claim from different address', async () => {
@@ -556,6 +755,7 @@ contract('DelegateManager', async (accounts) => {
         stakerAccount,
         delegateAmount,
         { from: delegatorAccount1 })
+
       totalStakedForSP = await staking.totalStakedFor(stakerAccount)
       let delegators = await delegateManager.getDelegatorsList(stakerAccount)
       let spStake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount)).deployerStake
