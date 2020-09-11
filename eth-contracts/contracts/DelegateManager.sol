@@ -451,10 +451,11 @@ contract DelegateManager is InitializableV2 {
             (totalBalanceInSPFactory.sub(spLockedStake)).mul(totalRewards)
         ).div(totalActiveFunds);
 
-        spFactory.updateServiceProviderStake(
+        _updateServiceProviderStake(
+            spFactory,
             _serviceProvider,
-            /// newSpBalance = totalBalanceInSPFactory + spRewardShare + spDeployerCutRewards;
-            totalBalanceInSPFactory.add(spRewardShare.add(spDeployerCutRewards))
+            totalBalanceInSPFactory.add(spRewardShare.add(spDeployerCutRewards)),
+            totalBalanceInStaking
         );
     }
 
@@ -979,12 +980,10 @@ contract DelegateManager is InitializableV2 {
         );
 
         totalActiveFunds = totalBalanceOutsideStaking.sub(totalLockedUpStake);
-        /*
         require(
             mintedRewards == totalBalanceInStaking.sub(totalBalanceOutsideStaking),
             "DelegateManager: Reward amount mismatch"
         );
-        */
 
         return (
             totalBalanceInStaking,
@@ -992,6 +991,32 @@ contract DelegateManager is InitializableV2 {
             totalActiveFunds,
             spLockedStake,
             mintedRewards
+        );
+    }
+
+    function _updateServiceProviderStake(
+        ServiceProviderFactory _spFactory,
+        address _serviceProvider,
+        uint256 _newSpBalance,
+        uint256 _totalBalanceInStaking
+    ) internal
+    {
+        uint256 newBalance = _newSpBalance;
+        uint256 newTotalOutsideStaking = (_newSpBalance).add(spDelegateInfo[_serviceProvider].totalDelegatedStake);
+        if (newTotalOutsideStaking < _totalBalanceInStaking) {
+            newTotalOutsideStaking = _totalBalanceInStaking.sub(spDelegateInfo[_serviceProvider].totalDelegatedStake); 
+            newBalance = _totalBalanceInStaking.sub(spDelegateInfo[_serviceProvider].totalDelegatedStake);
+        }
+
+        require(
+            ((newBalance).add(spDelegateInfo[_serviceProvider].totalDelegatedStake)) == (_totalBalanceInStaking),
+            "Delman:Mismatch 2"
+        );
+
+        _spFactory.updateServiceProviderStake(
+            _serviceProvider,
+            /// newSpBalance = totalBalanceInSPFactory + spRewardShare + spDeployerCutRewards;
+            newBalance
         );
     }
 
