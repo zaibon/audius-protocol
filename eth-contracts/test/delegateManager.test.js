@@ -721,6 +721,24 @@ contract('DelegateManager', async (accounts) => {
       return
     })
 
+    it.only('Decrease in reward for pending stake decrease', async () => {
+      // At the start of this test, we have 2 SPs each with DEFAULT_AMOUNT staked
+      let fundsPerRound = await claimsManager.getFundsPerRound()
+      let expectedIncrease = fundsPerRound.div(_lib.toBN(4))
+      // Request decrease in stake corresponding to 1/2 of DEFAULT_AMOUNT
+      let decreaseStakeAmount = DEFAULT_AMOUNT.div(_lib.toBN(2))
+      await serviceProviderFactory.requestDecreaseStake(decreaseStakeAmount, { from: stakerAccount })
+      let info = await getAccountStakeInfo(stakerAccount)
+      await claimsManager.initiateRound({ from: stakerAccount })
+      await delegateManager.claimRewards(stakerAccount, { from: stakerAccount })
+      let info2 = await getAccountStakeInfo(stakerAccount)
+      let stakingDiff = (info2.totalInStakingContract).sub(info.totalInStakingContract)
+      let spFactoryDiff = (info2.spFactoryStake).sub(info.spFactoryStake)
+      console.log(`stakingDiff:${stakingDiff.toString()}, expected=${expectedIncrease.toString()}`)
+      assert.isTrue(stakingDiff.eq(expectedIncrease), 'Expected increase not found in Staking.sol')
+      assert.isTrue(spFactoryDiff.eq(expectedIncrease), 'Expected increase not found in SPFactory')
+    })
+
     it('Sandbox', async () => {
       console.log('sandbox')
 
@@ -2332,23 +2350,6 @@ contract('DelegateManager', async (accounts) => {
         acctInfo = await getAccountStakeInfo(stakerAccount)
         assert.isTrue(acctInfo.totalInStakingContract.eq(DEFAULT_AMOUNT), 'Expect default in staking')
         assert.isTrue(acctInfo.spFactoryStake.eq(DEFAULT_AMOUNT), 'Expect default in sp factory')
-      })
-
-      it('Decrease in reward for pending stake decrease', async () => {
-        // At the start of this test, we have 2 SPs each with DEFAULT_AMOUNT staked
-        let fundsPerRound = await claimsManager.getFundsPerRound()
-        let expectedIncrease = fundsPerRound.div(_lib.toBN(4))
-        // Request decrease in stake corresponding to 1/2 of DEFAULT_AMOUNT
-        let decreaseStakeAmount = DEFAULT_AMOUNT.div(_lib.toBN(2))
-        await serviceProviderFactory.requestDecreaseStake(decreaseStakeAmount, { from: stakerAccount })
-        let info = await getAccountStakeInfo(stakerAccount)
-        await claimsManager.initiateRound({ from: stakerAccount })
-        await delegateManager.claimRewards(stakerAccount, { from: stakerAccount })
-        let info2 = await getAccountStakeInfo(stakerAccount)
-        let stakingDiff = (info2.totalInStakingContract).sub(info.totalInStakingContract)
-        let spFactoryDiff = (info2.spFactoryStake).sub(info.spFactoryStake)
-        assert.isTrue(stakingDiff.eq(expectedIncrease), 'Expected increase not found in Staking.sol')
-        assert.isTrue(spFactoryDiff.eq(expectedIncrease), 'Expected increase not found in SPFactory')
       })
 
       it('Slash cancels pending undelegate request', async () => {
