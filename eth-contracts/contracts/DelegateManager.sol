@@ -447,16 +447,33 @@ contract DelegateManager is InitializableV2 {
         // Rewards directly allocated to service provider for their stake
         // Total active funds for direct deployer reward share
         /// totalActiveDeployerFunds = totalBalanceInSPFactory.sub(spLockedStake);
+        /*
         uint256 spRewardShare = (
             (totalBalanceInSPFactory.sub(spLockedStake)).mul(totalRewards)
         ).div(totalActiveFunds);
+        */
 
+        uint256 spRewardShare = (totalRewards.sub(totalDelegatedStakeIncrease)).sub(spDeployerCutRewards);
+
+        // totalRewards = totalDelegatedStakeIncrease + spRewardShare + spDeployerCutRewards
+        // if totalRewards > calculatedRewards, calculatedRewards += (totalRewards - calcRewards)
+        require(
+            totalRewards == (spRewardShare.add(spDeployerCutRewards).add(totalDelegatedStakeIncrease)),
+            "Inconsistent reward distro");
+
+        spFactory.updateServiceProviderStake(
+            _serviceProvider,
+            /// newSpBalance = totalBalanceInSPFactory + spRewardShare + spDeployerCutRewards;
+            totalBalanceInSPFactory.add(spRewardShare.add(spDeployerCutRewards))
+        );
+/*
         _updateServiceProviderStake(
             spFactory,
             _serviceProvider,
             totalBalanceInSPFactory.add(spRewardShare.add(spDeployerCutRewards)),
             totalBalanceInStaking
         );
+        */
     }
 
     /**
@@ -974,7 +991,6 @@ contract DelegateManager is InitializableV2 {
         );
 
         // Amount in delegate manager staked to service provider
-        // I THINK THIS IS MISSING DELEGATION FROM _SERVICEPROVIDER
         uint256 totalBalanceOutsideStaking = (
             totalBalanceInSPFactory.add(spDelegateInfo[_serviceProvider].totalDelegatedStake)
         );
