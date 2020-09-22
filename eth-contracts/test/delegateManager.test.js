@@ -36,7 +36,7 @@ const DECREASE_STAKE_LOCKUP_DURATION = UNDELEGATE_LOCKUP_DURATION
 const callValue0 = _lib.toBN(0)
 
 
-contract('DelegateManager', async (accounts) => {
+contract.only('DelegateManager', async (accounts) => {
   let staking, stakingAddress, token, registry, governance
   let serviceProviderFactory, serviceTypeManager, claimsManager, delegateManager
 
@@ -347,19 +347,26 @@ contract('DelegateManager', async (accounts) => {
   }
 
   const getTotalDelegatorStake = async (delegator) => {
+    let totalDelegatorStake = await delegateManager.getTotalDelegation(delegator, { from: delegator})
     let validTypes = await serviceTypeManager.getValidServiceTypes()
-    let totalDelegatorStake = _lib.toBN(0)
+    let computedTotalDelegatorStake = _lib.toBN(0)
     for (const serviceType of validTypes) {
       let numTypeIds = await serviceProviderFactory.getTotalServiceTypeProviders(serviceType)
       let i = 1
       while (i <= numTypeIds) {
         let info = await serviceProviderFactory.getServiceEndpointInfo(serviceType, i)
         let serviceProvider = info.owner
+        console.log(`gettotaldelegatorstake serviceProvider: ${serviceProvider}, delegator: ${delegator}`)
         let totalDelegatedToOwner = await delegateManager.getDelegatorStakeForServiceProvider(delegator, serviceProvider)
-        totalDelegatorStake = totalDelegatorStake.add(totalDelegatedToOwner)
+        computedTotalDelegatorStake = computedTotalDelegatorStake.add(totalDelegatedToOwner)
         i++
       }
     }
+    assert.isTrue(
+      totalDelegatorStake.eq(computedTotalDelegatorStake),
+      `totalDelStakeFromContract: ${totalDelegatorStake}, computedTotal: ${computedTotalDelegatorStake} - ${delegator}`
+    )
+    console.log(`totalDelStakeFromContract: ${totalDelegatorStake}, computedTotal: ${computedTotalDelegatorStake}`)
     return totalDelegatorStake
   }
 
@@ -648,7 +655,7 @@ contract('DelegateManager', async (accounts) => {
       assert.isTrue(initialSpStake.eq(totalStakedForSP), 'Staking.sol back to initial value')
     })
 
-    it('Single delegator + claim', async () => {
+    it.only('Single delegator + claim', async () => {
       // TODO: Validate all
       // Transfer 1000 tokens to delegator
       await token.transfer(delegatorAccount1, INITIAL_BAL, { from: proxyDeployerAddress })
@@ -822,8 +829,10 @@ contract('DelegateManager', async (accounts) => {
       const slashAmountVal = _lib.audToWei((_lib.fromWei(totalInStakingContract)) * 30 / 100)
       const slashAmount = _lib.toBN(slashAmountVal)
 
+      console.log(`Performing slash`)
       // Perform slash functions
       await _lib.slash(slashAmountVal, slasherAccount, governance, delegateManagerKey, guardianAddress)
+      console.log(`Slash completed`)
 
       // Summarize after execution
       let spFactoryStake = (await serviceProviderFactory.getServiceProviderDetails(stakerAccount)).deployerStake
