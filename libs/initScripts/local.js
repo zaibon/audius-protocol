@@ -127,7 +127,7 @@ const run = async () => {
         // Update arbitrary cnode
         const serviceCount = args[3]
         if (serviceCount === undefined) throw new Error('update-delegate-wallet requires a service # as the second arg')
-        envPath = '../creator-node/compose/env/commonEnv.sh'
+        envPath = `../creator-node/compose/env/commonEnv${serviceCount}.sh`
         const account = ethAccounts[parseInt(serviceCount)]
         let endpoint = makeCreatorNodeEndpoint(serviceCount)
         await _updateCreatorNodeConfig(account, envPath, envPath, endpoint, /* isShell */ true)
