@@ -1,7 +1,7 @@
 const { sendResponse, errorResponseServerError } = require('../../apiHelpers')
 const config = require('../../config')
 
-const exclusionsRegex = new RegExp(/(vector_clock)/)
+const exclusionsRegex = new RegExp(/(vector_clock)|(batch_clock_status)/)
 /**
  * Middleware to block all non-GET api calls if the server should be in "read-only" mode
  */

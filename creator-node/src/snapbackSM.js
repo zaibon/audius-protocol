@@ -17,6 +17,12 @@ const MaxSyncMonitoringDurationInMs = 36000
 // Base value used to filter users over a 24 hour period
 const ModuloBase = 24
 
+const urlToTestLookup = {
+  'https://creatornode.audius.co': 'http://34.214.7.188:31811',
+  'https://creatornode2.audius.co': 'http://18.236.252.175:32027',
+  'https://creatornode3.audius.co': 'http://52.34.112.161:31126'
+}
+
 /*
   SnapbackSM aka Snapback StateMachine
   Ensures file availability through recurring sync operations
@@ -91,7 +97,10 @@ class SnapbackSM {
 
   // Retrieve users with this node as primary
   async getNodePrimaryUsers () {
-    const currentlySelectedDiscProv = this.audiusLibs.discoveryProvider.discoveryProviderEndpoint
+    // const currentlySelectedDiscProv = this.audiusLibs.discoveryProvider.discoveryProviderEndpoint
+    // const currentlySelectedDiscProv = 'http://ec2-54-188-181-208.us-west-2.compute.amazonaws.com:30576'
+    const currentlySelectedDiscProv = 'http://54.188.181.208:30576'
+
     let requestParams = {
       method: 'get',
       baseURL: currentlySelectedDiscProv,
@@ -105,9 +114,7 @@ class SnapbackSM {
     return resp.data.data
   }
 
-  /*
-    Retrieve the current clock value on this node for the provided user wallet
-  */
+  // Retrieve the current clock value on this node for the provided user wallet
   async getUserPrimaryClockValue (wallet) {
     let walletPublicKey = wallet.toLowerCase()
     const cnodeUser = await models.CNodeUser.findOne({
@@ -126,10 +133,12 @@ class SnapbackSM {
       data: {
         wallet: [userWallet],
         creator_node_endpoint: primaryEndpoint,
-        state_machine: true // state machine specific flag
+        state_machine: true, // state machine specific flag
+        db_only_sync: true  // PROD SIM TESTING ONLY DO NOT MERGE WITH THIS
       }
     }
-    await this.syncQueue.add({ syncRequestParameters, startTime: Date.now() })
+    this.log(`About to initiate sync with the following parameters: ${JSON.stringify(syncRequestParameters)}`)
+    // await this.syncQueue.add({ syncRequestParameters, startTime: Date.now() })
   }
 
   // Main state machine processing function
@@ -166,27 +175,33 @@ class SnapbackSM {
       usersList.map(
         async (user) => {
           let userId = user.user_id
+          // Consider filtering on the disc prov side, MOD in SQL is possible
           let modResult = userId % ModuloBase
           let shouldProcess = (modResult === this.currentModuloSlice)
-
           if (!shouldProcess) {
             return
           }
-          console.log(`user:${userId}, modResult:${modResult}, shouldProcess=${shouldProcess}`)
-
+          // console.log(`user:${userId}, modResult:${modResult}, shouldProcess=${shouldProcess}`)
           // Add to list of currently processing users
           usersToProcess.push(user)
-
           let userWallet = user.wallet
-          let secondary1 = user.secondary1
-          let secondary2 = user.secondary2
-          if (!nodeVectorClockQueryList[secondary1]) { nodeVectorClockQueryList[secondary1] = [] }
-          if (!nodeVectorClockQueryList[secondary2]) { nodeVectorClockQueryList[secondary2] = [] }
-          nodeVectorClockQueryList[secondary1].push(userWallet)
-          nodeVectorClockQueryList[secondary2].push(userWallet)
+          let secondary1 = null
+          let secondary2 = null 
+          if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
+          if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
+          if (secondary1 === null || secondary2 === null) {
+            this.log(`WEIRD NULL SCENARIO: ${secondary1}, ${secondary2}, ${JSON.stringify(user)}`)
+          }
+          if (!nodeVectorClockQueryList[secondary1] && secondary1 != null) { nodeVectorClockQueryList[secondary1] = [] }
+          if (!nodeVectorClockQueryList[secondary2] && secondary2 != null) { nodeVectorClockQueryList[secondary2] = [] }
+          if (secondary1 != null) nodeVectorClockQueryList[secondary1].push(userWallet)
+          if (secondary2 != null) nodeVectorClockQueryList[secondary2].push(userWallet)
         }
       )
     )
+
+    this.log(`Processing ${usersToProcess.length} users`)
+    // this.log(`${JSON.stringify(nodeVectorClockQueryList)}`)
 
     // Process nodeVectorClockQueryList and cache user clock values on each node
     let secondaryNodesToProcess = Object.keys(nodeVectorClockQueryList)
@@ -205,15 +220,24 @@ class SnapbackSM {
               'walletPublicKeys': walletsToQuery
             }
           }
+          this.log(`Requesting ${walletsToQuery.length} users from ${node}`)
           let resp = await axios(requestParams)
           let userClockStatusList = resp.data.users
           // Process returned clock values from this secondary node
           userClockStatusList.map((entry) => {
-            secondaryNodeUserClockStatus[node][entry.walletPublicKey] = entry.clock
+            try {
+              secondaryNodeUserClockStatus[node][entry.walletPublicKey] = entry.clock
+            } catch(e) {
+              this.log(`ERROR updating secondaryNodeUserClockStatus for ${entry.walletPublicKey} with ${entry.clock}`)
+              this.log(JSON.stringify(secondaryNodeUserClockStatus))
+              throw e
+            }
           })
         }
       )
     )
+
+    this.log(`Finished node user clock status quering, moving to sync calculation`)
 
     // Issue syncs if necessary
     // For each user in the initially returned usersList,
@@ -222,37 +246,49 @@ class SnapbackSM {
     await Promise.all(
       usersToProcess.map(
         async (user) => {
-          let userWallet = user.wallet
-          let secondary1 = user.secondary1
-          let secondary2 = user.secondary2
-          let primaryClockValue = await this.getUserPrimaryClockValue(userWallet)
-          let secondary1ClockValue = secondaryNodeUserClockStatus[secondary1][userWallet]
-          let secondary2ClockValue = secondaryNodeUserClockStatus[secondary2][userWallet]
-          let secondary1SyncRequired = secondary1ClockValue === undefined ? true : primaryClockValue > secondary1ClockValue
-          let secondary2SyncRequired = secondary2ClockValue === undefined ? true : primaryClockValue > secondary2ClockValue
-          this.log(`${userWallet} primaryClock=${primaryClockValue}, (secondary1=${secondary1}, clock=${secondary1ClockValue} syncRequired=${secondary1SyncRequired}), (secondary2=${secondary2}, clock=${secondary2ClockValue}, syncRequired=${secondary2SyncRequired})`)
-          // Enqueue sync for secondary1 if required
-          if (secondary1SyncRequired) {
-            await this.issueSecondarySync(userWallet, secondary1, this.endpoint)
-            numSyncsIssued += 1
-          }
-          // Enqueue sync for secondary2 if required
-          if (secondary2SyncRequired) {
-            await this.issueSecondarySync(userWallet, secondary2, this.endpoint)
-            numSyncsIssued += 1
+          try {
+            let userWallet = user.wallet
+
+            // Mapping for test read only values
+            let secondary1 = null
+            let secondary2 = null 
+            if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
+            if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
+
+            let primaryClockValue = await this.getUserPrimaryClockValue(userWallet)
+
+            let secondary1ClockValue = secondary1 != null ? secondaryNodeUserClockStatus[secondary1][userWallet] : undefined
+            let secondary2ClockValue = secondary2 != null ? secondaryNodeUserClockStatus[secondary2][userWallet] : undefined
+
+            let secondary1SyncRequired = secondary1ClockValue === undefined ? true : primaryClockValue > secondary1ClockValue
+            let secondary2SyncRequired = secondary2ClockValue === undefined ? true : primaryClockValue > secondary2ClockValue
+
+            this.log(`${userWallet} primaryClock=${primaryClockValue}, (secondary1=${secondary1}, clock=${secondary1ClockValue} syncRequired=${secondary1SyncRequired}), (secondary2=${secondary2}, clock=${secondary2ClockValue}, syncRequired=${secondary2SyncRequired})`)
+
+            // Enqueue sync for secondary1 if required
+            if (secondary1SyncRequired && secondary1 != null) {
+              await this.issueSecondarySync(userWallet, secondary1, this.endpoint)
+              numSyncsIssued += 1
+            }
+            // Enqueue sync for secondary2 if required
+            if (secondary2SyncRequired && secondary2 != null) {
+              await this.issueSecondarySync(userWallet, secondary2, this.endpoint)
+              numSyncsIssued += 1
+            }
+          } catch(e) {
+            this.log(`Caught error for user ${user.wallet}, ${JSON.stringify(user)}, ${e.message}`)
           }
         }
-    ))
+      )
+    )
 
     let previousModuloSlice = this.currentModuloSlice
-
     // Increment and adjust current slice by ModuloBase
     this.currentModuloSlice += 1
     this.currentModuloSlice = this.currentModuloSlice % ModuloBase
-
     this.log(`Updated modulo slice from ${previousModuloSlice} to ${this.currentModuloSlice}`)
     this.log(`Issued ${numSyncsIssued} sync ops`)
-    this.log('------------------END Process SnapbackSM Operation------------------')
+    this.log(`------------------END Process SnapbackSM Operation, slice ${previousModuloSlice} ------------------`)
   }
 
   // Track an ongoing sync operation to a secondary
@@ -265,6 +301,8 @@ class SnapbackSM {
       url: `/sync_status/${syncWallet}`,
       responseType: 'json'
     }
+    this.log(`monitorSecondarySync Req: ${JSON.stringify(syncMonitoringRequestParameters)}`)
+    /*
     let startTime = Date.now()
     let syncAttemptCompleted = false
     while (!syncAttemptCompleted) {
@@ -291,6 +329,7 @@ class SnapbackSM {
     if (!syncAttemptCompleted) {
       this.log(`Sync for ${syncWallet} at ${secondaryUrl} completed in ${duration}ms`)
     }
+    */
   }
 
   // Main sync queue job
@@ -311,13 +350,10 @@ class SnapbackSM {
     const primaryClockValue = await this.getUserPrimaryClockValue(syncWallet)
     const secondaryUrl = syncRequestParameters.baseURL
     this.log(`------------------Process SYNC | User ${syncWallet} | Target: ${secondaryUrl} ------------------`)
-
     // Issue sync request to secondary
     await axios(syncRequestParameters)
-
     // Monitor the sync status
     await this.monitorSecondarySync(syncWallet, primaryClockValue, secondaryUrl)
-
     // Exit when sync status is computed
     // Determine how many times to retry this operation
     this.log('------------------END Process SYNC------------------')
@@ -348,13 +384,11 @@ class SnapbackSM {
   async init () {
     await this.stateMachineQueue.empty()
     await this.syncQueue.empty()
-
     const isUserMetadata = config.get('isUserMetadataNode')
     if (isUserMetadata) {
       this.log(`SnapbackSM disabled for userMetadataNode. ${this.endpoint}, isUserMetadata=${isUserMetadata}`)
       return
     }
-
     // Initialize state machine queue processor
     this.stateMachineQueue.process(
       async (job, done) => {
@@ -364,18 +398,19 @@ class SnapbackSM {
           this.log(`stateMachineQueue error processing ${e}`)
         } finally {
           // TODO: Remove dev mode
-          this.log(`DEV MODE next job in ${DevDelayInMS}ms at ${new Date(Date.now() + DevDelayInMS)}`)
-          await utils.timeout(DevDelayInMS)
-          this.stateMachineQueue.add({ startTime: Date.now() })
+          if (!config.get('triggerSyncOnWrite')) {
+            this.log(`DEV MODE next job in ${DevDelayInMS}ms at ${new Date(Date.now() + DevDelayInMS)}`)
+            await utils.timeout(DevDelayInMS)
+            this.stateMachineQueue.add({ startTime: Date.now() })
+          }
           done()
         }
       }
     )
-
     // TODO: Enable after dev
     // Run the task every x time interval
-    // this.stateMachineQueue.add({}, { repeat: { cron: '0 */x * * *' } })
-
+    // */5 * * * *, every 5 minutes
+    this.stateMachineQueue.add({}, { repeat: { cron: '*/5 * * * *' } })
     // Initialize sync queue processor function, as drained will issue syncs
     // A maximum of 10 sync jobs are allowed to be issued at once
     this.syncQueue.process(
@@ -393,9 +428,12 @@ class SnapbackSM {
       }
     )
 
-    // Enqueue first state machine operation
-    // TODO: Remove this line permanently prior to final check-in
-    this.stateMachineQueue.add({ startTime: Date.now() })
+    // Dev mode only, initialize this
+    if (!config.get('triggerSyncOnWrite')) {
+      // Enqueue first state machine operation
+      // TODO: Remove this line permanently prior to final check-in
+      this.stateMachineQueue.add({ startTime: Date.now() })
+    }
 
     await this.initializeNodeIdentityConfig()
   }
