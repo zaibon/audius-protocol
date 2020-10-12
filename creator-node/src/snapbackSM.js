@@ -81,25 +81,16 @@ class SnapbackSM {
     }
   }
 
-  // Query eth-contracts chain for endpoint to ID info
-  async recoverSpID () {
-    if (config.get('spID') !== 0) {
-      this.log(`Known spID=${config.get('spID')}`)
-      return
-    }
-
-    const recoveredSpID = await this.audiusLibs.ethContracts.ServiceProviderFactoryClient.getServiceProviderIdFromEndpoint(
-      this.endpoint
-    )
-    this.log(`Recovered ${recoveredSpID} for ${this.endpoint}`)
-    config.set('spID', recoveredSpID)
-  }
-
   // Retrieve users with this node as primary
   async getNodePrimaryUsers () {
     // const currentlySelectedDiscProv = this.audiusLibs.discoveryProvider.discoveryProviderEndpoint
     // const currentlySelectedDiscProv = 'http://ec2-54-188-181-208.us-west-2.compute.amazonaws.com:30576'
     const currentlySelectedDiscProv = 'http://54.188.181.208:30576'
+    if (!currentlySelectedDiscProv) {
+      // Re-initialize if no discovery provider has been selected
+      this.initialized = false
+      throw new Error('No discovery provider currently selected, exiting')
+    }
 
     let requestParams = {
       method: 'get',
@@ -115,13 +106,18 @@ class SnapbackSM {
   }
 
   // Retrieve the current clock value on this node for the provided user wallet
-  async getUserPrimaryClockValue (wallet) {
-    let walletPublicKey = wallet.toLowerCase()
-    const cnodeUser = await models.CNodeUser.findOne({
-      where: { walletPublicKey }
+  async getUserPrimaryClockValues (wallets) {
+    const cnodeUsers = await models.CNodeUser.findAll({
+      where: {
+        walletPublicKey: {
+          [models.Sequelize.Op.in]: wallets
+        }
+      }
     })
-    const clockValue = (cnodeUser) ? cnodeUser.dataValues.clock : -1
-    return clockValue
+    return cnodeUsers.reduce((o, k) => {
+      o[k.walletPublicKey] = k.clock
+      return o
+    }, {})
   }
 
   // Enqueue a sync request to a particular secondary
@@ -165,40 +161,50 @@ class SnapbackSM {
     let usersList = await this.getNodePrimaryUsers()
 
     // Generate list of wallets to query clock number
+    // Structured as { nodeEndpoint: [wallet1, wallet2, ...] }
     let nodeVectorClockQueryList = {}
 
     // Users actually selected to process
     let usersToProcess = []
 
+    let wallets = []
+
     // Issue queries to secondaries for each user
-    await Promise.all(
-      usersList.map(
-        async (user) => {
-          let userId = user.user_id
-          // Consider filtering on the disc prov side, MOD in SQL is possible
-          let modResult = userId % ModuloBase
-          let shouldProcess = (modResult === this.currentModuloSlice)
-          if (!shouldProcess) {
-            return
-          }
-          // console.log(`user:${userId}, modResult:${modResult}, shouldProcess=${shouldProcess}`)
-          // Add to list of currently processing users
-          usersToProcess.push(user)
-          let userWallet = user.wallet
-          let secondary1 = null
-          let secondary2 = null 
-          if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
-          if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
-          if (secondary1 === null || secondary2 === null) {
-            this.log(`WEIRD NULL SCENARIO: ${secondary1}, ${secondary2}, ${JSON.stringify(user)}`)
-          }
-          if (!nodeVectorClockQueryList[secondary1] && secondary1 != null) { nodeVectorClockQueryList[secondary1] = [] }
-          if (!nodeVectorClockQueryList[secondary2] && secondary2 != null) { nodeVectorClockQueryList[secondary2] = [] }
-          if (secondary1 != null) nodeVectorClockQueryList[secondary1].push(userWallet)
-          if (secondary2 != null) nodeVectorClockQueryList[secondary2].push(userWallet)
+    usersList.map(
+      (user) => {
+        let userId = user.user_id
+        let modResult = userId % ModuloBase
+        let shouldProcess = (modResult === this.currentModuloSlice)
+
+        if (!shouldProcess) {
+          return
         }
-      )
+        console.log(`user:${userId}, modResult:${modResult}, shouldProcess=${shouldProcess}`)
+
+        // Add to list of currently processing users
+        usersToProcess.push(user)
+        let userWallet = user.wallet
+        wallets.push(userWallet)
+
+        // Conditionally asign secondary if present
+        let secondary1 = null
+        let secondary2 = null
+        if (user.secondary1) secondary1 = user.secondary1
+        if (user.secondary2) secondary2 = user.secondary2
+
+        // Create node
+        if (!nodeVectorClockQueryList[secondary1] && secondary1 != null) { nodeVectorClockQueryList[secondary1] = [] }
+        if (!nodeVectorClockQueryList[secondary2] && secondary2 != null) { nodeVectorClockQueryList[secondary2] = [] }
+
+        // Push wallet if necessary onto secondary wallet list
+        if (secondary1 != null) nodeVectorClockQueryList[secondary1].push(userWallet)
+        if (secondary2 != null) nodeVectorClockQueryList[secondary2].push(userWallet)
+      }
     )
+    this.log(`Processing ${usersToProcess.length} users`)
+
+    // Cached primary clock values for currently processing user set
+    let primaryClockValues = await this.getUserPrimaryClockValues(wallets)
 
     this.log(`Processing ${usersToProcess.length} users`)
     // this.log(`${JSON.stringify(nodeVectorClockQueryList)}`)
@@ -224,15 +230,17 @@ class SnapbackSM {
           let resp = await axios(requestParams)
           let userClockStatusList = resp.data.users
           // Process returned clock values from this secondary node
-          userClockStatusList.map((entry) => {
-            try {
-              secondaryNodeUserClockStatus[node][entry.walletPublicKey] = entry.clock
-            } catch(e) {
-              this.log(`ERROR updating secondaryNodeUserClockStatus for ${entry.walletPublicKey} with ${entry.clock}`)
-              this.log(JSON.stringify(secondaryNodeUserClockStatus))
-              throw e
+          userClockStatusList.map(
+            (entry) => {
+              try {
+                secondaryNodeUserClockStatus[node][entry.walletPublicKey] = entry.clock
+              } catch (e) {
+                this.log(`ERROR updating secondaryNodeUserClockStatus for ${entry.walletPublicKey} with ${entry.clock}`)
+                this.log(JSON.stringify(secondaryNodeUserClockStatus))
+                throw e
+              }
             }
-          })
+          )
         }
       )
     )
@@ -247,24 +255,18 @@ class SnapbackSM {
       usersToProcess.map(
         async (user) => {
           try {
-            let userWallet = user.wallet
-
-            // Mapping for test read only values
+            let userWallet = null
             let secondary1 = null
-            let secondary2 = null 
-            if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
-            if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
-
-            let primaryClockValue = await this.getUserPrimaryClockValue(userWallet)
-
+            let secondary2 = null
+            if (user.wallet) userWallet = user.wallet
+            if (user.secondary1) secondary1 = user.secondary1
+            if (user.secondary2) secondary2 = user.secondary2
+            let primaryClockValue = primaryClockValues[userWallet]
             let secondary1ClockValue = secondary1 != null ? secondaryNodeUserClockStatus[secondary1][userWallet] : undefined
             let secondary2ClockValue = secondary2 != null ? secondaryNodeUserClockStatus[secondary2][userWallet] : undefined
-
             let secondary1SyncRequired = secondary1ClockValue === undefined ? true : primaryClockValue > secondary1ClockValue
             let secondary2SyncRequired = secondary2ClockValue === undefined ? true : primaryClockValue > secondary2ClockValue
-
             this.log(`${userWallet} primaryClock=${primaryClockValue}, (secondary1=${secondary1}, clock=${secondary1ClockValue} syncRequired=${secondary1SyncRequired}), (secondary2=${secondary2}, clock=${secondary2ClockValue}, syncRequired=${secondary2SyncRequired})`)
-
             // Enqueue sync for secondary1 if required
             if (secondary1SyncRequired && secondary1 != null) {
               await this.issueSecondarySync(userWallet, secondary1, this.endpoint)
@@ -275,7 +277,7 @@ class SnapbackSM {
               await this.issueSecondarySync(userWallet, secondary2, this.endpoint)
               numSyncsIssued += 1
             }
-          } catch(e) {
+          } catch (e) {
             this.log(`Caught error for user ${user.wallet}, ${JSON.stringify(user)}, ${e.message}`)
           }
         }
@@ -359,15 +361,28 @@ class SnapbackSM {
     this.log('------------------END Process SYNC------------------')
   }
 
+  // Query eth-contracts chain for endpoint to ID info
+  async recoverSpID () {
+    if (config.get('spID') !== 0) {
+      this.log(`Known spID=${config.get('spID')}`)
+      return config.get('spID')
+    }
+
+    const recoveredSpID = await this.audiusLibs.ethContracts.ServiceProviderFactoryClient.getServiceProviderIdFromEndpoint(
+      this.endpoint
+    )
+    this.log(`Recovered ${recoveredSpID} for ${this.endpoint}`)
+    config.set('spID', recoveredSpID)
+    return config.get('spID')
+  }
+
   // Function which ensures that state machine has been initialized correctly
   // If not available on startup, subsequent state machine will attempt to initialize until success
   async initializeNodeIdentityConfig () {
     this.log(`Initializing SnapbackSM`)
     this.log(`Retrieving spID for ${this.endpoint}`)
-    const recoveredSpID = await this.audiusLibs.ethContracts.ServiceProviderFactoryClient.getServiceProviderIdFromEndpoint(
-      this.endpoint
-    )
-    config.set('spID', recoveredSpID)
+    this.log(`Developer mode: ${config.get('snapbackDevModeEnabled')}`)
+    const recoveredSpID = await this.recoverSpID()
     // A returned spID of 0 means this this.endpoint is currently not registered on chain
     // In this case, the stateMachine is considered to be 'uninitialized'
     if (recoveredSpID === 0) {
@@ -375,7 +390,6 @@ class SnapbackSM {
       this.log(`Failed to recover spID for ${this.endpoint}, received ${config.get('spID')}`)
       return
     }
-    this.log(`Recovered ${config.get('spID')} for ${this.endpoint}`)
     this.initialized = true
     return this.initialized
   }
@@ -398,7 +412,7 @@ class SnapbackSM {
           this.log(`stateMachineQueue error processing ${e}`)
         } finally {
           // TODO: Remove dev mode
-          if (!config.get('triggerSyncOnWrite')) {
+          if (config.get('snapbackDevModeEnabled')) {
             this.log(`DEV MODE next job in ${DevDelayInMS}ms at ${new Date(Date.now() + DevDelayInMS)}`)
             await utils.timeout(DevDelayInMS)
             this.stateMachineQueue.add({ startTime: Date.now() })
@@ -407,10 +421,14 @@ class SnapbackSM {
         }
       }
     )
-    // TODO: Enable after dev
+
     // Run the task every x time interval
     // */5 * * * *, every 5 minutes
-    this.stateMachineQueue.add({}, { repeat: { cron: '*/5 * * * *' } })
+    // 0 * * * *, every hour at minute 0
+    if (!config.get('snapbackDevModeEnabled')) {
+      this.stateMachineQueue.add({}, { repeat: { cron: '0 * * * *' } })
+    }
+
     // Initialize sync queue processor function, as drained will issue syncs
     // A maximum of 10 sync jobs are allowed to be issued at once
     this.syncQueue.process(
@@ -428,10 +446,8 @@ class SnapbackSM {
       }
     )
 
-    // Dev mode only, initialize this
-    if (!config.get('triggerSyncOnWrite')) {
-      // Enqueue first state machine operation
-      // TODO: Remove this line permanently prior to final check-in
+    // Enqueue first state machine operation if dev mode enabled
+    if (config.get('snapbackDevModeEnabled')) {
       this.stateMachineQueue.add({ startTime: Date.now() })
     }
 
