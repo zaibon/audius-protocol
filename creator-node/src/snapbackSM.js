@@ -410,7 +410,6 @@ class SnapbackSM {
         } catch (e) {
           this.log(`stateMachineQueue error processing ${e}`)
         } finally {
-          // TODO: Remove dev mode
           if (config.get('snapbackDevModeEnabled')) {
             this.log(`DEV MODE next job in ${DevDelayInMS}ms at ${new Date(Date.now() + DevDelayInMS)}`)
             await utils.timeout(DevDelayInMS)
@@ -426,7 +425,7 @@ class SnapbackSM {
     // 0 * * * *, every hour at minute 0
     if (!config.get('snapbackDevModeEnabled')) {
       this.log(`Enabling cron schedule for stateMachine queue`)
-      this.stateMachineQueue.add({}, { repeat: { cron: '0 * * * *' } })
+      this.stateMachineQueue.add({ startTime: Date.now() }, { repeat: { cron: '*/30 * * * *' } })
     }
 
     // Initialize sync queue processor function, as drained will issue syncs
