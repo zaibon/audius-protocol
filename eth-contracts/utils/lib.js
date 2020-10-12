@@ -205,6 +205,32 @@ export const deployToken = async (
   return token
 }
 
+export const deployTokenGSN = async function (
+  artifacts,
+  proxyDeployerAddress,
+  tokenOwnerAddress,
+  governanceAddress
+) {
+  const AudiusTokenGSN = artifacts.require('AudiusTokenGSN')
+  const AudiusAdminUpgradeabilityProxy = artifacts.require('AudiusAdminUpgradeabilityProxy')
+
+  const token0 = await AudiusTokenGSN.new({ from: proxyDeployerAddress })
+  const tokenInitData = encodeCall(
+    'initialize',
+    ['address', 'address'],
+    [tokenOwnerAddress, governanceAddress]
+  )
+  const tokenProxy = await AudiusAdminUpgradeabilityProxy.new(
+    token0.address,
+    governanceAddress,
+    tokenInitData,
+    { from: proxyDeployerAddress }
+  )
+  const token = await AudiusTokenGSN.at(tokenProxy.address)
+
+  return token
+}
+
 export const deployRegistry = async (artifacts, proxyAdminAddress, proxyDeployerAddress) => {
   const Registry = artifacts.require('Registry')
   const AudiusAdminUpgradeabilityProxy = artifacts.require('AudiusAdminUpgradeabilityProxy')
