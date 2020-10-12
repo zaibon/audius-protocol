@@ -189,8 +189,8 @@ class SnapbackSM {
         // Conditionally asign secondary if present
         let secondary1 = null
         let secondary2 = null
-        if (user.secondary1) secondary1 = user.secondary1
-        if (user.secondary2) secondary2 = user.secondary2
+        if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
+        if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
 
         // Create node
         if (!nodeVectorClockQueryList[secondary1] && secondary1 != null) { nodeVectorClockQueryList[secondary1] = [] }
@@ -259,8 +259,8 @@ class SnapbackSM {
             let secondary1 = null
             let secondary2 = null
             if (user.wallet) userWallet = user.wallet
-            if (user.secondary1) secondary1 = user.secondary1
-            if (user.secondary2) secondary2 = user.secondary2
+            if (user.secondary1) secondary1 = urlToTestLookup[user.secondary1]
+            if (user.secondary2) secondary2 = urlToTestLookup[user.secondary2]
             let primaryClockValue = primaryClockValues[userWallet]
             let secondary1ClockValue = secondary1 != null ? secondaryNodeUserClockStatus[secondary1][userWallet] : undefined
             let secondary2ClockValue = secondary2 != null ? secondaryNodeUserClockStatus[secondary2][userWallet] : undefined
@@ -426,6 +426,7 @@ class SnapbackSM {
     // */5 * * * *, every 5 minutes
     // 0 * * * *, every hour at minute 0
     if (!config.get('snapbackDevModeEnabled')) {
+      this.log(`Enabling cron schedule for stateMachine queue`)
       this.stateMachineQueue.add({}, { repeat: { cron: '0 * * * *' } })
     }
 
@@ -448,6 +449,7 @@ class SnapbackSM {
 
     // Enqueue first state machine operation if dev mode enabled
     if (config.get('snapbackDevModeEnabled')) {
+      this.log(`DEV MODE | Initializing first stateMachine job`)
       this.stateMachineQueue.add({ startTime: Date.now() })
     }
 
