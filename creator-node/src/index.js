@@ -79,7 +79,6 @@ const startApp = async () => {
     await logIpfsPeerIds()
 
     await serviceRegistry.initServices()
-    logger.error(`triggerSyncOnWrite=${config.get('triggerSyncOnWrite')}`)
     logger.info('Initialized services!')
     appInfo = initializeApp(config.get('port'), storagePath, serviceRegistry)
   }
