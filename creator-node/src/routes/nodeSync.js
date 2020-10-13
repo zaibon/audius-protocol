@@ -319,14 +319,14 @@ async function _nodesync (req, walletPublicKeys, creatorNodeEndpoint, dbOnlySync
           const latestBlockNumber = cnodeUser.latestBlockNumber
           const latestClockValue = cnodeUser.clock
 
-          if (!dbOnlySync) {
-            if ((fetchedLatestBlockNumber === -1 && latestBlockNumber !== -1) ||
-              (latestClockValue >= fetchedLatestClockVal)
-            ) {
-              throw new Error(`Imported data is outdated, will not sync. Imported latestBlockNumber \
-                ${fetchedLatestBlockNumber} Self latestBlockNumber ${latestBlockNumber}. \
-                fetched latestClockVal: ${fetchedLatestClockVal}, self latestClockVal: ${latestClockValue}`)
-            }
+          if (latestClockValue > fetchedLatestClockVal) {
+            throw new Error(`Imported data is outdated, will not sync. Imported latestBlockNumber \
+              ${fetchedLatestBlockNumber} Self latestBlockNumber ${latestBlockNumber}. \
+              fetched latestClockVal: ${fetchedLatestClockVal}, self latestClockVal: ${latestClockValue}`)
+          } else if (latestClockValue === fetchedLatestClockVal) {
+            // Already to update, no sync necessary
+            req.logger.info(`User ${fetchedWalletPublicKey} already up to date! fetchedLatestClockVal=${fetchedLatestClockVal}, latestClockValue=${latestClockValue}`)
+            continue
           }
 
           const cnodeUserUUID = cnodeUser.cnodeUserUUID

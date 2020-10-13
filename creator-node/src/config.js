@@ -7,7 +7,7 @@ const fs = require('fs')
 convict.addFormat({
   name: 'BooleanCustom',
   validate: function (val) {
-    return (typeof val === "boolean") || (typeof val === "string")
+    return (typeof val === 'boolean') || (typeof val === 'string')
   },
   coerce: function (val) {
     return val === true || val === 'true'
@@ -364,19 +364,6 @@ const config = convict({
     doc: 'Identity service endpoint to record creator-node driven plays against',
     format: String,
     env: 'identityService',
-    default: ''
-  },
-  /** Manual content blacklists */
-  userBlacklist: {
-    doc: 'Comma-separated list of user blockchain IDs that creator node should avoid serving / storing',
-    format: String,
-    env: 'userBlacklist',
-    default: ''
-  },
-  trackBlacklist: {
-    doc: 'Comma-separated list of track blockchain IDs that creator node should avoid serving / storing',
-    format: String,
-    env: 'trackBlacklist',
     default: ''
   },
   creatorNodeIsDebug: {

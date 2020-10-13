@@ -11,8 +11,11 @@ const DevDelayInMS = 3000
 // Represents the maximum number of syncs that can be issued at once
 const MaxParallelSyncJobs = 10
 
-// Maximum number of time to wait for a sync operation
-const MaxSyncMonitoringDurationInMs = 36000
+// Maximum number of time to wait for a sync operation, 6 minutes by default
+const MaxSyncMonitoringDurationInMs = 360000
+
+// Retry delay between requests during monitoring
+const SyncMonitoringRetryDelay = 15000
 
 // Base value used to filter users over a 24 hour period
 const ModuloBase = 24
@@ -22,6 +25,8 @@ const urlToTestLookup = {
   'https://creatornode2.audius.co': 'http://18.236.252.175:32027',
   'https://creatornode3.audius.co': 'http://52.34.112.161:31126'
 }
+// 0 */1 * * * every hours at minute 0
+const StateMachineSchedule = '0 */1 * * *'
 
 /*
   SnapbackSM aka Snapback StateMachine
@@ -45,8 +50,7 @@ class SnapbackSM {
     // Sync queue handles issuing sync request from primary -> secondary
     this.syncQueue = this.createBullQueue('creator-node-sync-queue')
     // Incremented as users are processed
-    // TODO: Randomize this starting point
-    this.currentModuloSlice = 0
+    this.currentModuloSlice = this.randomStartingSlice()
   }
 
   // Class level log output
@@ -65,6 +69,13 @@ class SnapbackSM {
         }
       }
     )
+  }
+
+  // Randomly select an initial slice
+  randomStartingSlice () {
+    let slice = Math.floor(Math.random() * Math.floor(ModuloBase))
+    this.log(`Starting at data slice ${slice}/${ModuloBase}`)
+    return slice
   }
 
   // Helper function to retrieve all relevant configs
@@ -148,9 +159,11 @@ class SnapbackSM {
     // then no operations will be performed
     if (!this.initialized) {
       await this.initializeNodeIdentityConfig()
-      return
+      // Exit if failed to initialize
+      if (!this.initialized) return
     }
-    // 1.) Retrieve base information for state machine operations
+
+    // Additional verification that current spID is not 0
     let spInfo = await this.getSPInfo()
     if (spInfo.spID === 0) {
       this.log(`Invalid spID, recovering ${spInfo}`)
@@ -167,10 +180,11 @@ class SnapbackSM {
     // Users actually selected to process
     let usersToProcess = []
 
+    // Wallets being processed in this state machine operation
     let wallets = []
 
     // Issue queries to secondaries for each user
-    usersList.map(
+    usersList.forEach(
       (user) => {
         let userId = user.user_id
         let modResult = userId % ModuloBase
@@ -201,13 +215,8 @@ class SnapbackSM {
       }
     )
     this.log(`Processing ${usersToProcess.length} users`)
-
     // Cached primary clock values for currently processing user set
     let primaryClockValues = await this.getUserPrimaryClockValues(wallets)
-
-    this.log(`Processing ${usersToProcess.length} users`)
-    // this.log(`${JSON.stringify(nodeVectorClockQueryList)}`)
-
     // Process nodeVectorClockQueryList and cache user clock values on each node
     let secondaryNodesToProcess = Object.keys(nodeVectorClockQueryList)
     let secondaryNodeUserClockStatus = {}
@@ -215,7 +224,6 @@ class SnapbackSM {
       secondaryNodesToProcess.map(
         async (node) => {
           secondaryNodeUserClockStatus[node] = {}
-          // TODO: Batch this too?
           let walletsToQuery = nodeVectorClockQueryList[node]
           let requestParams = {
             baseURL: node,
@@ -244,7 +252,7 @@ class SnapbackSM {
       )
     )
 
-    this.log(`Finished node user clock status quering, moving to sync calculation`)
+    this.log(`Finished node user clock status querying, moving to sync calculation. Modulo slice ${this.currentModuloSlice}`)
 
     // Issue syncs if necessary
     // For each user in the initially returned usersList,
@@ -282,7 +290,6 @@ class SnapbackSM {
         }
       )
     )
-
     let previousModuloSlice = this.currentModuloSlice
     // Increment and adjust current slice by ModuloBase
     this.currentModuloSlice += 1
@@ -312,7 +319,9 @@ class SnapbackSM {
         let respData = syncMonitoringResp.data.data
         this.log(`processSync ${syncWallet} secondary response: ${JSON.stringify(respData)}`)
         // A success response does not necessarily guarantee completion, validate response data to confirm
-        if (respData.clockValue === primaryClockValue) {
+        // Returned secondaryClockValue can be greater than the cached primaryClockValue if a client write was initiated
+        //    after primaryClockValue cached and resulting sync is monitored
+        if (respData.clockValue >= primaryClockValue) {
           syncAttemptCompleted = true
           this.log(`processSync ${syncWallet} clockValue from secondary:${respData.clockValue}, primary:${primaryClockValue}`)
         }
@@ -323,8 +332,8 @@ class SnapbackSM {
         this.log(`ERROR: processSync ${syncWallet} timeout for ${syncWallet}`)
         syncAttemptCompleted = true
       }
-      // 1s delay between retries
-      await utils.timeout(1000)
+      // Delay between retries
+      await utils.timeout(SyncMonitoringRetryDelay)
     }
     let duration = Date.now() - startTime
     if (!syncAttemptCompleted) {
@@ -421,11 +430,8 @@ class SnapbackSM {
     )
 
     // Run the task every x time interval
-    // */5 * * * *, every 5 minutes
-    // 0 * * * *, every hour at minute 0
     if (!config.get('snapbackDevModeEnabled')) {
-      this.log(`Enabling cron schedule for stateMachine queue`)
-      this.stateMachineQueue.add({ startTime: Date.now() }, { repeat: { cron: '*/30 * * * *' } })
+      this.stateMachineQueue.add({}, { repeat: { cron: StateMachineSchedule } })
     }
 
     // Initialize sync queue processor function, as drained will issue syncs
