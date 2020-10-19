@@ -134,7 +134,7 @@ const getCID = async (req, res) => {
     req.logger.debug(`Retrieving ${queryResults.storagePath} directly from filesystem`)
     return await streamFromFileSystem(req, res, queryResults.storagePath)
   } catch (e) {
-    req.logger.debug(`Failed to retrieve ${queryResults.storagePath} from FS`)
+    req.logger.info(`Failed to retrieve ${queryResults.storagePath} from FS`)
 
     // ugly nested try/catch but don't want findCIDInNetwork to stop execution of the rest of the route
     try {
@@ -236,7 +236,7 @@ const getDirCID = async (req, res) => {
     req.logger.debug(`Retrieving ${queryResults.storagePath} directly from filesystem`)
     return await streamFromFileSystem(req, res, queryResults.storagePath)
   } catch (e) {
-    req.logger.debug(`Failed to retrieve ${queryResults.storagePath} from FS`)
+    req.logger.info(`Failed to retrieve ${queryResults.storagePath} from FS`)
 
     // ugly nested try/catch but don't want findCIDInNetwork to stop execution of the rest of the route
     try {
