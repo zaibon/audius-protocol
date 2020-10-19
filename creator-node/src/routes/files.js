@@ -131,10 +131,10 @@ const getCID = async (req, res) => {
     // Add a rehydration task to the queue to be processed in the background
     RehydrateIpfsQueue.addRehydrateIpfsFromFsIfNecessaryTask(CID, queryResults.storagePath, { logContext: req.logContext })
     // Attempt to stream file to client.
-    req.logger.info(`Retrieving ${queryResults.storagePath} directly from filesystem`)
+    req.logger.debug(`Retrieving ${queryResults.storagePath} directly from filesystem`)
     return await streamFromFileSystem(req, res, queryResults.storagePath)
   } catch (e) {
-    req.logger.info(`Failed to retrieve ${queryResults.storagePath} from FS`)
+    req.logger.debug(`Failed to retrieve ${queryResults.storagePath} from FS`)
 
     // ugly nested try/catch but don't want findCIDInNetwork to stop execution of the rest of the route
     try {
@@ -233,10 +233,10 @@ const getDirCID = async (req, res) => {
     // Add rehydrate task to queue to be processed in background
     RehydrateIpfsQueue.addRehydrateIpfsFromFsIfNecessaryTask(dirCID, parentStoragePath, { logContext: req.logContext }, filename)
     // Attempt to stream file to client.
-    req.logger.info(`Retrieving ${queryResults.storagePath} directly from filesystem`)
+    req.logger.debug(`Retrieving ${queryResults.storagePath} directly from filesystem`)
     return await streamFromFileSystem(req, res, queryResults.storagePath)
   } catch (e) {
-    req.logger.info(`Failed to retrieve ${queryResults.storagePath} from FS`)
+    req.logger.debug(`Failed to retrieve ${queryResults.storagePath} from FS`)
 
     // ugly nested try/catch but don't want findCIDInNetwork to stop execution of the rest of the route
     try {

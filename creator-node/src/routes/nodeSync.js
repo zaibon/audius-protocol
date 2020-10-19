@@ -130,7 +130,7 @@ module.exports = function (app) {
         // Rehydrate files if necessary
         for (let i = 0; i < files.length; i += RehydrateIPFSConcurrencyLimit) {
           const exportFilesSlice = files.slice(i, i + RehydrateIPFSConcurrencyLimit)
-          req.logger.info(`Export rehydrateIpfs processing files ${i} to ${i + RehydrateIPFSConcurrencyLimit}`)
+          req.logger.debug(`Export rehydrateIpfs processing files ${i} to ${i + RehydrateIPFSConcurrencyLimit}`)
           // Ensure all relevant files are available through IPFS at export time
           await Promise.all(exportFilesSlice.map(async (file) => {
             try {
@@ -144,7 +144,7 @@ module.exports = function (app) {
                 await RehydrateIpfsQueue.addRehydrateIpfsDirFromFsIfNecessaryTask(file.multihash, { logContext: req.logContext })
               }
             } catch (e) {
-              req.logger.info(`Export rehydrateIpfs processing files ${i} to ${i + RehydrateIPFSConcurrencyLimit}, ${e}`)
+              req.logger.debug(`Export rehydrateIpfs processing files ${i} to ${i + RehydrateIPFSConcurrencyLimit}, ${e}`)
             }
           }))
         }
