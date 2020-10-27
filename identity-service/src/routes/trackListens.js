@@ -201,6 +201,29 @@ const getTrendingTracks = async (
   return parsedListenCounts
 }
 
+const getRouteCacheKey = (route, params = {}) => {
+  return `ROUTE:${route}:PARAM:${getParamString(params)}`
+}
+
+const getParamString = (params) => {
+  const paramsKeys = Object.keys(params)
+  if(paramsKeys.length === 0) return ''
+  paramsKeys.sort()
+  return paramsKeys.reduce((cacheKey, key) => {
+    let item = params[key]
+    if (item === undefined || item === null) return cacheKey
+    if (Array.isArray(item)) {
+      item.sort()
+      return cacheKey.concat(`${key}=${getParamString(item)}`)
+    } else if (typeof item === 'object') {
+        return cacheKey.concat(`${key}=${getParamString(item)}`)
+    }
+    return cacheKey.concat(`${key}=${item}`)
+  }, []).join(':')
+}
+
+const trendingCacheTtlSec = 10
+
 module.exports = function (app) {
   app.post('/tracks/:id/listen', handleResponse(async (req, res) => {
     const trackId = parseInt(req.params.id)
@@ -350,11 +373,22 @@ module.exports = function (app) {
     let body = req.body
     let idList = body.track_ids
     let { limit, offset } = getPaginationVars(body.limit, body.offset)
+    const route = 'POST:/tracks/trending/:time*?'
+    const cacheKey = getRouteCacheKey(route, { time, idList, limit, offset })
+    const redis = app.get('redis')
+    let trendingTracks = await redis.get(cacheKey)
+    if (trendingTracks) {
+      return successResponse({ listenCounts: JSON.parse(trendingTracks) })
+    }
     let parsedListenCounts = await getTrendingTracks(
       idList,
       time,
       limit,
-      offset)
+      offset
+    )
+    if (Array.isArray(parsedListenCounts)) {
+      await redis.set(cacheKey, JSON.stringify(parsedListenCounts), 'EX', trendingCacheTtlSec)
+    }
     return successResponse({ listenCounts: parsedListenCounts })
   }))
 
@@ -362,12 +396,22 @@ module.exports = function (app) {
     let time = req.params.time
     let idList = req.query.id
     let { limit, offset } = getPaginationVars(req.query.limit, req.query.offset)
+    const route = 'GET:/tracks/trending/:time*?'
+    const cacheKey = getRouteCacheKey(route,{ time, idList, limit, offset })
+    const redis = app.get('redis')
+    let trendingTracks = await redis.get(cacheKey)
+    if (trendingTracks) {
+      return successResponse({ listenCounts: JSON.parse(trendingTracks) })
+    }
     let parsedListenCounts = await getTrendingTracks(
       idList,
       time,
       limit,
-      offset)
-
+      offset
+    )
+    if (Array.isArray(parsedListenCounts)) {
+      await redis.set(cacheKey, JSON.stringify(parsedListenCounts), 'EX', trendingCacheTtlSec)
+    }
     return successResponse({ listenCounts: parsedListenCounts })
   }))
 
