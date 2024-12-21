@@ -5,14 +5,14 @@
   "main": "src/index.js",
   "dependencies": {
     "@audius/libs": "^0.13.3",
-    "axios": "^0.19.2",
+    "axios": "^0.28.0",
     "colors": "^1.4.0",
     "commander": "^6.0.0",
-    "convict": "^5.2.0",
+    "convict": "^6.2.4",
     "dotenv": "^8.2.0",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.7",
     "untildify": "^4.0.0",
-    "web3": "^1.2.7"
+    "web3": "^1.10.4"
   },
   "devDependencies": {
     "eslint": "^7.2.0",
